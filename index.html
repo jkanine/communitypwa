@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Community Hub</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4f46e5">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f5f6fa;--c:#fff;--t:#1b1e2b;--m:#6b7080;--p:#4f46e5;--b:#e3e5ee;--ok:#16794c;--okb:#dcf5e8;--bad:#b42318;--badb:#fde3e0}
+@media(prefers-color-scheme:dark){:root{--bg:#12141c;--c:#1b1e2a;--t:#eceef6;--m:#9aa0b5;--b:#2c3042;--ok:#6fdca8;--okb:#12382a;--bad:#ff9d93;--badb:#451c19}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--t);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{background:var(--p);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+header b{font-size:18px}header small{opacity:.9}
+nav{display:flex;background:var(--c);border-bottom:1px solid var(--b);position:sticky;top:0;z-index:5}
+nav button{flex:1;padding:13px 4px;border:0;background:none;color:var(--m);font:inherit;font-weight:600;cursor:pointer;border-bottom:3px solid transparent}
+nav button.on{color:var(--p);border-color:var(--p)}
+main{max-width:760px;margin:0 auto;padding:16px}
+h2{margin:4px 0 12px}h3{margin:16px 0 8px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:14px;margin-bottom:10px}
+.click{cursor:pointer}.click:hover{border-color:var(--p)}
+.muted{color:var(--m);font-size:13px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar .sp{flex:1}
+.btn{border:1px solid var(--b);background:var(--c);color:var(--t);padding:8px 14px;border-radius:8px;font:inherit;cursor:pointer}
+.btn.pri{background:var(--p);border-color:var(--p);color:#fff}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:var(--c)}
+.btn.del{color:var(--bad)}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t);font:inherit}
+.bar select,.bar label{width:auto}
+label{display:block;font-weight:600;font-size:13px;margin:10px 0 4px}
+.b{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--b);color:var(--m)}
+.b.ok{background:var(--okb);color:var(--ok)}.b.bad{background:var(--badb);color:var(--bad)}.b.wip{background:var(--p);color:#fff}
+.row2{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap}
+#modal .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+#modal .box{background:var(--c);width:100%;max-width:620px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px}
+@media(min-width:700px){#modal .ov{align-items:center}#modal .box{border-radius:16px}}
+.auth{max-width:380px;margin:40px auto}
+.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs .btn{flex:1}.tabs .on{background:var(--p);color:#fff;border-color:var(--p)}
+.err{color:var(--bad);font-size:13px;margin-top:8px}
+.trow{border:1px dashed var(--b);border-radius:10px;padding:8px;margin-bottom:8px;display:grid;grid-template-columns:1fr 140px auto;gap:6px}
+.trow textarea{grid-column:1/-1;min-height:44px}
+.cm{border-top:1px solid var(--b);padding:8px 0}
+.empty{text-align:center;color:var(--m);padding:30px}
+</style></head>
+<body>
+<div id="app"></div><div id="modal"></div>
+<script>
+const K='ch_db',S='ch_session';
+let db=load(),me=null,st={v:'issues',iid:null,f:'all',tf:'all',ts:'asc',mine:false,auth:'login',err:'',m:null};
+function load(){try{return JSON.parse(localStorage.getItem(K))||{users:[],issues:[]}}catch(e){return{users:[],issues:[]}}}
+function save(){localStorage.setItem(K,JSON.stringify(db));render()}
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const user=id=>db.users.find(u=>u.id===id);
+const nm=id=>{const u=user(id);return u?u.first+' '+u.last:'Unknown'};
+const fd=t=>new Date(t).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+const fdd=d=>d?fd(d+'T12:00:00'):'No due date';
+const end=d=>d?new Date(d+'T23:59:59').getTime():Infinity;
+async function hash(p,salt){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(salt+':'+p));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+const td=(t,i)=>t.due||i.due;
+function istat(i){const n=i.tasks.length,d=i.tasks.filter(t=>t.done).length;
+ if(n&&d===n){const c=Math.max(...i.tasks.map(t=>t.completedAt));return{done:1,n,d,c,late:c>end(i.due)}}
+ return{done:0,n,d,late:Date.now()>end(i.due)}}
+const ibadge=s=>s.done?`<span class="b ${s.late?'bad':'ok'}">Completed ${fd(s.c)} · ${s.late?'Late':'On time'}</span>`:`<span class="b ${s.late?'bad':''}">${s.late?'Overdue · not complete':'Not complete'}</span>`;
+function tbadge(t,i){if(t.done){const l=t.completedAt>end(td(t,i));return`<span class="b ${l?'bad':'ok'}">Completed ${fd(t.completedAt)} · ${l?'Late':'On time'}</span>`}
+ const late=Date.now()>end(td(t,i));return(t.assigneeId?`<span class="b wip">In progress</span> `:`<span class="b">Open</span> `)+(late?'<span class="b bad">Overdue</span>':'')}
+
+/* ---------- views ---------- */
+function authView(){const s=st.auth==='signup';
+ return`<header><b>🏘️ Community Hub</b></header><div class="auth card">
+ <div class="tabs"><button class="btn ${s?'':'on'}" data-act="auth" data-v="login">Log in</button><button class="btn ${s?'on':''}" data-act="auth" data-v="signup">Create account</button></div>
+ <form data-form="${s?'signup':'login'}">
+ ${s?`<label>First name</label><input name="first" required><label>Last name</label><input name="last" required>`:''}
+ <label>Email</label><input name="email" type="email" required autocomplete="email">
+ <label>Password</label><input name="pw" type="password" required minlength="6" autocomplete="${s?'new-password':'current-password'}">
+ ${st.err?`<div class="err">${esc(st.err)}</div>`:''}
+ <p><button class="btn pri" style="width:100%">${s?'Create account':'Log in'}</button></p></form></div>`}
+
+function shell(){const tabs=[['members','👥 Members'],['issues','📋 Issues'],['tasks','✅ Tasks']];
+ return`<header><div><b>🏘️ Community Hub</b><br><small>${esc(me.first)} ${esc(me.last)}</small></div><button class="btn" data-act="logout">Log out</button></header>
+ <nav>${tabs.map(([k,l])=>`<button class="${st.v===k?'on':''}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</nav>
+ <main>${st.v==='members'?members():st.v==='tasks'?tasksView():st.iid?issueDetail():issuesView()}</main>`}
+
+function members(){return`<h2>Members (${db.users.length})</h2>`+db.users.map(u=>`<div class="card"><b>${esc(u.first)} ${esc(u.last)}</b><div class="muted">First name: ${esc(u.first)} · Last name: ${esc(u.last)}</div><div class="muted">✉️ ${esc(u.email)}</div></div>`).join('')}
+
+function issuesView(){
+ let l=db.issues.map(i=>[i,istat(i)]).filter(([i,s])=>st.f==='all'||(st.f==='done'?s.done:!s.done)).sort((a,b)=>b[0].created-a[0].created);
+ return`<h2>Issues</h2><div class="bar"><select data-chg="f"><option value="all" ${st.f==='all'?'selected':''}>Both</option><option value="open" ${st.f==='open'?'selected':''}>Not completed</option><option value="done" ${st.f==='done'?'selected':''}>Completed</option></select><span class="sp"></span><button class="btn pri" data-act="newissue">+ New issue</button></div>`+
+ (l.length?l.map(([i,s])=>`<div class="card click" data-act="issue" data-i="${i.id}"><div class="row2"><b>${esc(i.title)}</b>${ibadge(s)}</div>
+ <div class="muted">By ${esc(nm(i.authorId))} · Created ${fd(i.created)} · Due ${fdd(i.due)} · ${s.d}/${s.n} tasks done</div></div>`).join(''):'<div class="empty">No issues to show.</div>')}
+
+function issueDetail(){const i=db.issues.find(x=>x.id===st.iid);if(!i){st.iid=null;return issuesView()}
+ const s=istat(i),own=i.authorId===me.id;
+ return`<div class="bar"><button class="btn" data-act="back">← Issues</button><span class="sp"></span>${own?`<button class="btn" data-act="editissue">Edit</button><button class="btn del" data-act="delissue">Delete</button>`:''}</div>
+ <div class="card"><div class="row2"><h2 style="margin:0">${esc(i.title)}</h2>${ibadge(s)}</div>
+ <div class="muted">By ${esc(nm(i.authorId))} · Created ${fd(i.created)} · Due ${fdd(i.due)} · ${s.d}/${s.n} tasks done</div>
+ <p style="white-space:pre-wrap">${esc(i.desc)}</p></div><h3>Tasks</h3>`+
+ (i.tasks.length?i.tasks.map(t=>taskCard(t,i,0)).join(''):'<div class="empty">This issue has no tasks.</div>')}
+
+function taskCard(t,i,showIssue){return`<div class="card click" data-act="task" data-i="${i.id}" data-t="${t.id}"><div class="row2"><b>${esc(t.title)}</b><span>${tbadge(t,i)}</span></div>
+ <div class="muted">${showIssue?`Issue: ${esc(i.title)} · `:''}Due ${fdd(td(t,i))}${t.assigneeId?` · ${t.done?'Done':'Doing'}: ${esc(nm(t.assigneeId))}`:''}</div></div>`}
+
+function tasksView(){
+ let l=db.issues.flatMap(i=>i.tasks.map(t=>({t,i})));
+ l=l.filter(({t})=>(st.tf==='all'||(st.tf==='done'?t.done:st.tf==='wip'?(!t.done&&t.assigneeId):(!t.done&&!t.assigneeId)))&&(!st.mine||t.assigneeId===me.id));
+ const d=({t,i})=>end(td(t,i)),sg=st.ts;
+ l.sort((a,b)=>sg==='asc'?d(a)-d(b):sg==='desc'?d(b)-d(a):b.i.created-a.i.created);
+ const o=(v,x)=>`<option value="${v}" ${st[x]===v?'selected':''}>`;
+ return`<h2>All tasks</h2><div class="bar"><select data-chg="tf">${o('all','tf')}All statuses</option>${o('open','tf')}Open (no one doing)</option>${o('wip','tf')}In progress</option>${o('done','tf')}Completed</option></select>
+ <select data-chg="ts">${o('asc','ts')}Due date ↑ (soonest)</option>${o('desc','ts')}Due date ↓ (latest)</option>${o('new','ts')}Newest issue</option></select>
+ <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" style="width:auto" data-chg="mine" ${st.mine?'checked':''}>Mine only</label></div>`+
+ (l.length?l.map(({t,i})=>taskCard(t,i,1)).join(''):'<div class="empty">No tasks match.</div>')}
+
+/* ---------- modals ---------- */
+function taskModal(){const i=db.issues.find(x=>x.id===st.m.i),t=i&&i.tasks.find(x=>x.id===st.m.t);if(!t){st.m=null;return''}
+ const mine=t.assigneeId===me.id;let a='';
+ if(!t.done){if(!t.assigneeId)a=`<button class="btn pri" data-act="claim">🙋 I'm doing this</button>`;
+  else if(mine)a=`<button class="btn" data-act="release">Stop working on it</button><button class="btn ok" data-act="done">✔ Mark complete</button>`;
+  else a=`<span class="muted">${esc(nm(t.assigneeId))} is working on this — only they can complete it.</span>`}
+ else if(mine)a=`<button class="btn" data-act="reopen">Reopen</button>`;
+ return`<div class="ov" data-act="bg"><div class="box"><div class="row2"><h2 style="margin:0">${esc(t.title)}</h2><button class="btn" data-act="close">✕</button></div>
+ <p>${tbadge(t,i)}</p><p style="white-space:pre-wrap">${esc(t.desc)||'<span class=muted>No details.</span>'}</p>
+ <div class="muted">Issue: <b>${esc(i.title)}</b><br>Due: ${fdd(td(t,i))}${t.due?'':' (issue due date)'}<br>Doing it: ${t.assigneeId?esc(nm(t.assigneeId)):'nobody yet'}${t.done?`<br>Completed: ${fd(t.completedAt)} (${t.completedAt>end(td(t,i))?'late':'on time'})`:''}</div>
+ <div class="bar" style="margin-top:12px">${a}</div>
+ <h3>Comments (${t.comments.length})</h3>${t.comments.map(c=>`<div class="cm"><b>${esc(nm(c.uid))}</b> <span class="muted">${new Date(c.ts).toLocaleString()}</span><div style="white-space:pre-wrap">${esc(c.text)}</div></div>`).join('')}
+ <form data-form="comment" style="margin-top:8px"><textarea id="cm" name="text" placeholder="Comment as ${esc(me.first)}…" required></textarea><p><button class="btn pri">Add comment</button></p></form></div></div>`}
+
+function rowHtml(t={}){return`<div class="trow" data-tid="${t.id||''}"><input class="rt" placeholder="Task title" value="${esc(t.title)}"><input class="rd" type="date" title="Task due date (optional)" value="${t.due||''}"><button type="button" class="btn del" data-act="rmrow">✕</button><textarea class="rx" placeholder="Task details">${esc(t.desc)}</textarea></div>`}
+function formModal(i){return`<div class="ov"><div class="box"><h2>${i?'Edit':'New'} issue</h2>
+ <form data-form="issue" data-id="${i?i.id:''}"><label>Title</label><input name="title" required value="${esc(i?.title)}">
+ <label>Description</label><textarea name="desc" rows="3">${esc(i?.desc)}</textarea>
+ <label>Created</label><div class="muted">${fd(i?i.created:Date.now())}</div>
+ <label>Due date</label><input name="due" type="date" required value="${i?.due||''}">
+ <h3>Tasks</h3><div id="rows">${(i?i.tasks:[{}]).map(rowHtml).join('')}</div>
+ <button type="button" class="btn" data-act="addrow">+ Add task</button>
+ <div class="bar" style="margin-top:14px"><button class="btn pri">Save</button><button type="button" class="btn" data-act="close">Cancel</button></div></form></div></div>`}
+
+function renderModal(force){const el=$('#modal');if(!me||!st.m){el.innerHTML='';return}
+ if(st.m.t==='form'){if(force||!el.innerHTML)el.innerHTML=formModal(st.m.i?db.issues.find(x=>x.id===st.m.i):null);return}
+ const d=$('#cm')?.value;el.innerHTML=taskModal();if(d&&$('#cm'))$('#cm').value=d}
+function render(){me=user(localStorage.getItem(S));if(!me)st.m=null;
+ $('#app').innerHTML=me?shell():authView();renderModal()}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
+ if(a==='bg'&&e.target!==el)return;db=load();
+ const cur=()=>{const i=db.issues.find(x=>x.id===st.m?.i);return[i,i&&i.tasks.find(x=>x.id===st.m.t)]};
+ if(a==='auth'){st.auth=el.dataset.v;st.err='';render()}
+ else if(a==='logout'){localStorage.removeItem(S);st.m=null;st.iid=null;render()}
+ else if(a==='tab'){st.v=el.dataset.v;st.iid=null;render()}
+ else if(a==='issue'){st.iid=el.dataset.i;render()}
+ else if(a==='back'){st.iid=null;render()}
+ else if(a==='task'){st.m={i:el.dataset.i,t:el.dataset.t};render()}
+ else if(a==='close'||a==='bg'){st.m=null;render()}
+ else if(a==='newissue'){st.m={t:'form'};renderModal(true)}
+ else if(a==='editissue'){st.m={t:'form',i:st.iid};renderModal(true)}
+ else if(a==='addrow'){$('#rows').insertAdjacentHTML('beforeend',rowHtml())}
+ else if(a==='rmrow'){el.closest('.trow').remove()}
+ else if(a==='delissue'){const i=db.issues.find(x=>x.id===st.iid);if(i&&i.authorId===me.id&&confirm('Delete this issue and all its tasks?')){db.issues=db.issues.filter(x=>x!==i&&x.id!==i.id);st.iid=null;save()}}
+ else{const[i,t]=cur();if(!t)return;
+  if(a==='claim'&&!t.assigneeId&&!t.done)t.assigneeId=me.id;
+  else if(a==='release'&&t.assigneeId===me.id&&!t.done)t.assigneeId=null;
+  else if(a==='done'&&t.assigneeId===me.id&&!t.done){t.done=true;t.completedAt=Date.now()}
+  else if(a==='reopen'&&t.assigneeId===me.id&&t.done){t.done=false;t.completedAt=null}
+  save()}
+});
+document.addEventListener('change',e=>{const k=e.target.dataset.chg;if(!k)return;st[k]=e.target.type==='checkbox'?e.target.checked:e.target.value;render()});
+document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target,k=f.dataset.form,v=Object.fromEntries(new FormData(f));db=load();
+ if(k==='signup'){const em=v.email.trim().toLowerCase();
+  if(db.users.some(u=>u.email===em)){st.err='That email is already registered.';return render()}
+  const u={id:uid(),first:v.first.trim(),last:v.last.trim(),email:em,pw:await hash(v.pw,em)};db.users.push(u);st.err='';localStorage.setItem(S,u.id);st.v='issues';save()}
+ else if(k==='login'){const em=v.email.trim().toLowerCase(),u=db.users.find(x=>x.email===em);
+  if(!u||u.pw!==await hash(v.pw,em)){st.err='Wrong email or password.';return render()}
+  st.err='';localStorage.setItem(S,u.id);st.v='issues';render()}
+ else if(k==='comment'){const i=db.issues.find(x=>x.id===st.m.i),t=i&&i.tasks.find(x=>x.id===st.m.t);if(!t)return;
+  t.comments.push({uid:me.id,text:v.text.trim(),ts:Date.now()});$('#cm').value='';save()}
+ else if(k==='issue'){const id=f.dataset.id,rows=[...f.querySelectorAll('.trow')].map(r=>({id:r.dataset.tid,title:r.querySelector('.rt').value.trim(),due:r.querySelector('.rd').value,desc:r.querySelector('.rx').value.trim()})).filter(r=>r.title);
+  let i=id&&db.issues.find(x=>x.id===id);
+  if(i&&i.authorId!==me.id)return;
+  if(!i){i={id:uid(),authorId:me.id,created:Date.now(),tasks:[]};db.issues.push(i)}
+  Object.assign(i,{title:v.title.trim(),desc:v.desc.trim(),due:v.due});
+  i.tasks=rows.map(r=>{const o=r.id&&i.tasks.find(x=>x.id===r.id);if(o){Object.assign(o,{title:r.title,desc:r.desc,due:r.due});return o}
+   return{id:uid(),title:r.title,desc:r.desc,due:r.due,assigneeId:null,done:false,completedAt:null,comments:[]}});
+  st.m=null;save()}
+});
+/* live updates: other tabs/windows change storage, re-render without reload */
+window.addEventListener('storage',e=>{if(e.key===K||e.key===S){db=load();render()}});
+setInterval(()=>{if(me&&!(st.m&&st.m.t==='form'))render()},60000); // keeps "overdue" flags fresh
+render();
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));
+</script></body></html>
