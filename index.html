@@ -78,7 +78,7 @@ function authView(){const s=st.auth==='signup';
  <label>Email</label><input name="email" type="email" required autocomplete="email">
  <label>Password</label><input name="pw" type="password" required minlength="6" autocomplete="${s?'new-password':'current-password'}">
  ${st.err?`<div class="err">${esc(st.err)}</div>`:''}
- <p><button class="btn pri" style="width:100%">${s?'Create account':'Log in'}</button></p></form><p class="muted" style="text-align:center;margin:0"><a href="#" data-act="demo" style="color:var(--p)">Load demo data</a></p></div>`}
+ <p><button class="btn pri" style="width:100%">${s?'Create account':'Log in'}</button></p></form>${db.users.some(u=>u.id.startsWith('demo-'))?`<p class="muted" style="text-align:center;margin:0">Demo accounts: ava, ben, chloe, diego or emma <b>@example.com</b><br>Password for all: <b>password123</b></p>`:''}</div>`}
 
 function shell(){const tabs=[['members','👥 Members'],['issues','📋 Issues'],['tasks','✅ Tasks']];
  return`<header><div><b>🏘️ Community Hub</b><br><small>${esc(me.first)} ${esc(me.last)}</small></div><div class="bar" style="margin:0"><button class="btn" data-act="export" title="Download backup (data.json)" aria-label="Export">⬇</button><button class="btn" data-act="import" title="Restore from backup" aria-label="Import">⬆</button><button class="btn" data-act="logout">Log out</button></div></header>
@@ -145,7 +145,7 @@ function renderModal(force){const el=$('#modal');if(!me||!st.m){el.innerHTML='';
 function render(){me=user(localStorage.getItem(S));if(!me)st.m=null;
  $('#app').innerHTML=me?shell():authView();renderModal()}
 
-/* ---------- demo data (login screen -> "Load demo data"; every demo user's password is password123) ---------- */
+/* ---------- demo data (added automatically on first run; every demo user's password is password123) ---------- */
 async function seedDemo(){db=load();
  const P='password123',D=864e5,now=Date.now(),day=n=>new Date(now+n*D).toISOString().slice(0,10);
  const U=[['ava','Ava','Johnson'],['ben','Ben','Carter'],['chloe','Chloe','Nguyen'],['diego','Diego','Ramirez'],['emma','Emma','Wilson']];
@@ -177,12 +177,12 @@ async function seedDemo(){db=load();
   T('books1','Find a location','',10,null,0,0),
   T('books2','Collect donated books','',18,null,0,0)])];
  for(const x of seed)if(!db.issues.some(i=>i.id===x.id))db.issues.push(x);
- save();alert('Demo data added. Log in with any of: ava, ben, chloe, diego or emma @example.com, password: password123');}
+ save()}
 
 /* ---------- events ---------- */
 const cur=()=>{const i=db.issues.find(x=>x.id===st.m?.i);return[i,i&&i.tasks.find(x=>x.id===st.m.t)]};
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
- if(a==='bg'&&e.target!==el)return;if(a==='demo'){e.preventDefault();seedDemo();return}db=load();
+ if(a==='bg'&&e.target!==el)return;db=load();
  if(a==='auth'){st.auth=el.dataset.v;st.err='';render()}
  else if(a==='logout'){localStorage.removeItem(S);st.m=null;st.iid=null;render()}
  else if(a==='tab'){st.v=el.dataset.v;st.iid=null;render()}
@@ -226,7 +226,7 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
 /* live updates across open tabs of this browser */
 window.addEventListener('storage',e=>{if(e.key===K||e.key===S){db=load();render()}});
 setInterval(()=>{if(me&&!(st.m&&st.m.t==='form'))render()},60000);
-/* first run in this browser: start from data.json in the repo, if there is one */
-(async()=>{if(localStorage.getItem(K)===null){try{const r=await fetch('data.json');if(r.ok){const d=await r.json();if(Array.isArray(d.users)&&Array.isArray(d.issues)){db=d;localStorage.setItem(K,JSON.stringify(db))}}}catch(e){}}render()})();
+/* first run in this browser: start with the demo data */
+(async()=>{if(localStorage.getItem(K)===null)await seedDemo();render()})();
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));
 </script></body></html>
