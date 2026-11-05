@@ -78,10 +78,10 @@ function authView(){const s=st.auth==='signup';
  <label>Email</label><input name="email" type="email" required autocomplete="email">
  <label>Password</label><input name="pw" type="password" required minlength="6" autocomplete="${s?'new-password':'current-password'}">
  ${st.err?`<div class="err">${esc(st.err)}</div>`:''}
- <p><button class="btn pri" style="width:100%">${s?'Create account':'Log in'}</button></p></form></div>`}
+ <p><button class="btn pri" style="width:100%">${s?'Create account':'Log in'}</button></p></form><p class="muted" style="text-align:center;margin:0"><a href="#" data-act="demo" style="color:var(--p)">Load demo data</a></p></div>`}
 
 function shell(){const tabs=[['members','👥 Members'],['issues','📋 Issues'],['tasks','✅ Tasks']];
- return`<header><div><b>🏘️ Community Hub</b><br><small>${esc(me.first)} ${esc(me.last)}</small></div><button class="btn" data-act="logout">Log out</button></header>
+ return`<header><div><b>🏘️ Community Hub</b><br><small>${esc(me.first)} ${esc(me.last)}</small></div><div class="bar" style="margin:0"><button class="btn" data-act="export" title="Download backup (data.json)" aria-label="Export">⬇</button><button class="btn" data-act="import" title="Restore from backup" aria-label="Import">⬆</button><button class="btn" data-act="logout">Log out</button></div></header>
  <nav>${tabs.map(([k,l])=>`<button class="${st.v===k?'on':''}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</nav>
  <main>${st.v==='members'?members():st.v==='tasks'?tasksView():st.iid?issueDetail():issuesView()}</main>`}
 
@@ -145,10 +145,44 @@ function renderModal(force){const el=$('#modal');if(!me||!st.m){el.innerHTML='';
 function render(){me=user(localStorage.getItem(S));if(!me)st.m=null;
  $('#app').innerHTML=me?shell():authView();renderModal()}
 
+/* ---------- demo data (login screen -> "Load demo data"; every demo user's password is password123) ---------- */
+async function seedDemo(){db=load();
+ const P='password123',D=864e5,now=Date.now(),day=n=>new Date(now+n*D).toISOString().slice(0,10);
+ const U=[['ava','Ava','Johnson'],['ben','Ben','Carter'],['chloe','Chloe','Nguyen'],['diego','Diego','Ramirez'],['emma','Emma','Wilson']];
+ for(const[k,f,l]of U){const em=k+'@example.com';if(!db.users.some(u=>u.email===em))db.users.push({id:'demo-'+k,first:f,last:l,email:em,pw:await hash(P,em)})}
+ const T=(id,title,desc,due,who,done,ago,cm=[])=>({id:'demo-'+id,title,desc,due:due==null?'':day(due),assigneeId:who?'demo-'+who:null,done:!!done,completedAt:done?now-ago*D:null,comments:cm.map(([u,t,a])=>({uid:'demo-'+u,text:t,ts:now-a*D}))});
+ const I=(id,title,desc,au,ago,due,tasks)=>({id:'demo-'+id,title,desc,authorId:'demo-'+au,created:now-ago*D,due:day(due),tasks});
+ const seed=[
+ I('park','Spring park cleanup','Organize a Saturday cleanup of Maple Street Park.','ava',20,-10,[
+  T('park1','Pick up supplies','Gloves, trash bags and litter grabbers from the hardware store.',-14,'ben',1,15),
+  T('park2','Recruit volunteers','Aim for at least 15 people.',-12,'chloe',1,9,[['chloe','Got 18 sign-ups, but it took longer than planned.',9],['ava','Great turnout, thank you!',8]]),
+  T('park3','Post flyers','Community board, library and coffee shop.',null,'diego',1,11)]),
+ I('fence','Community garden fence repair','The east fence is leaning and needs to be fixed before planting season.','ben',7,14,[
+  T('fence1','Get quotes','Call at least two contractors.',5,'emma',1,2,[['emma','Two quotes attached in the shared folder.',2]]),
+  T('fence2','Buy lumber','Pressure-treated posts and cedar boards.',9,'ava',0,0,[['ava','Ordering this weekend.',1]]),
+  T('fence3','Build the fence','Needs two or three people for a full day.',12,null,0,0)]),
+ I('party','Summer block party','Plan the annual block party on Oak Avenue.','chloe',12,30,[
+  T('party1','Book the street permit','Apply through the city website.',10,'diego',0,0),
+  T('party2','Arrange food trucks','Three trucks, different cuisines.',20,null,0,0),
+  T('party3','Set up sound system','Borrow speakers from the community center.',28,null,0,0),
+  T('party4','Create the schedule','Games, music and kids activities.',null,'chloe',1,1)]),
+ I('news','Newsletter redesign','Refresh the monthly newsletter layout and get it printed.','diego',25,-3,[
+  T('news1','Draft new layout','Two-column layout with a photo section.',-10,'emma',1,6),
+  T('news2','Collect neighbor stories','Need at least five short submissions.',-5,'ben',0,0,[['ben','Only three stories so far, still chasing the rest.',2]]),
+  T('news3','Print 200 copies','',-3,null,0,0)]),
+ I('watch','Neighborhood watch signup','Get a simple signup process running for the watch program.','emma',3,7,[
+  T('watch1','Create signup form','',4,'ava',1,1),
+  T('watch2','Share on social media','',6,'ben',1,0,[['ben','Posted in the neighborhood group.',0]])]),
+ I('books','Library book swap','A free book swap day at the community library.','ava',5,21,[
+  T('books1','Find a location','',10,null,0,0),
+  T('books2','Collect donated books','',18,null,0,0)])];
+ for(const x of seed)if(!db.issues.some(i=>i.id===x.id))db.issues.push(x);
+ save();alert('Demo data added. Log in with any of: ava, ben, chloe, diego or emma @example.com, password: password123');}
+
 /* ---------- events ---------- */
+const cur=()=>{const i=db.issues.find(x=>x.id===st.m?.i);return[i,i&&i.tasks.find(x=>x.id===st.m.t)]};
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const a=el.dataset.act;
- if(a==='bg'&&e.target!==el)return;db=load();
- const cur=()=>{const i=db.issues.find(x=>x.id===st.m?.i);return[i,i&&i.tasks.find(x=>x.id===st.m.t)]};
+ if(a==='bg'&&e.target!==el)return;if(a==='demo'){e.preventDefault();seedDemo();return}db=load();
  if(a==='auth'){st.auth=el.dataset.v;st.err='';render()}
  else if(a==='logout'){localStorage.removeItem(S);st.m=null;st.iid=null;render()}
  else if(a==='tab'){st.v=el.dataset.v;st.iid=null;render()}
@@ -160,7 +194,11 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if
  else if(a==='editissue'){st.m={t:'form',i:st.iid};renderModal(true)}
  else if(a==='addrow'){$('#rows').insertAdjacentHTML('beforeend',rowHtml())}
  else if(a==='rmrow'){el.closest('.trow').remove()}
- else if(a==='delissue'){const i=db.issues.find(x=>x.id===st.iid);if(i&&i.authorId===me.id&&confirm('Delete this issue and all its tasks?')){db.issues=db.issues.filter(x=>x!==i&&x.id!==i.id);st.iid=null;save()}}
+ else if(a==='export'){const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,1)],{type:'application/json'}));l.download='data.json';l.click()}
+ else if(a==='import'){const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=async()=>{try{const d=JSON.parse(await inp.files[0].text());if(!Array.isArray(d.users)||!Array.isArray(d.issues))throw 0;
+   if(confirm('Replace ALL data in this browser with the contents of this file?')){db=d;save()}}catch(x){alert('That file is not a valid backup.')}};inp.click()}
+ else if(a==='delissue'){const i=db.issues.find(x=>x.id===st.iid);if(i&&i.authorId===me.id&&confirm('Delete this issue and all its tasks?')){db.issues=db.issues.filter(x=>x.id!==i.id);st.iid=null;save()}}
  else{const[i,t]=cur();if(!t)return;
   if(a==='claim'&&!t.assigneeId&&!t.done)t.assigneeId=me.id;
   else if(a==='release'&&t.assigneeId===me.id&&!t.done)t.assigneeId=null;
@@ -176,20 +214,19 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
  else if(k==='login'){const em=v.email.trim().toLowerCase(),u=db.users.find(x=>x.email===em);
   if(!u||u.pw!==await hash(v.pw,em)){st.err='Wrong email or password.';return render()}
   st.err='';localStorage.setItem(S,u.id);st.v='issues';render()}
- else if(k==='comment'){const i=db.issues.find(x=>x.id===st.m.i),t=i&&i.tasks.find(x=>x.id===st.m.t);if(!t)return;
-  t.comments.push({uid:me.id,text:v.text.trim(),ts:Date.now()});$('#cm').value='';save()}
+ else if(k==='comment'){const[i,t]=cur();if(!t)return;t.comments.push({uid:me.id,text:v.text.trim(),ts:Date.now()});$('#cm').value='';save()}
  else if(k==='issue'){const id=f.dataset.id,rows=[...f.querySelectorAll('.trow')].map(r=>({id:r.dataset.tid,title:r.querySelector('.rt').value.trim(),due:r.querySelector('.rd').value,desc:r.querySelector('.rx').value.trim()})).filter(r=>r.title);
-  let i=id&&db.issues.find(x=>x.id===id);
-  if(i&&i.authorId!==me.id)return;
+  let i=id&&db.issues.find(x=>x.id===id);if(i&&i.authorId!==me.id)return;
   if(!i){i={id:uid(),authorId:me.id,created:Date.now(),tasks:[]};db.issues.push(i)}
   Object.assign(i,{title:v.title.trim(),desc:v.desc.trim(),due:v.due});
   i.tasks=rows.map(r=>{const o=r.id&&i.tasks.find(x=>x.id===r.id);if(o){Object.assign(o,{title:r.title,desc:r.desc,due:r.due});return o}
    return{id:uid(),title:r.title,desc:r.desc,due:r.due,assigneeId:null,done:false,completedAt:null,comments:[]}});
   st.m=null;save()}
 });
-/* live updates: other tabs/windows change storage, re-render without reload */
+/* live updates across open tabs of this browser */
 window.addEventListener('storage',e=>{if(e.key===K||e.key===S){db=load();render()}});
-setInterval(()=>{if(me&&!(st.m&&st.m.t==='form'))render()},60000); // keeps "overdue" flags fresh
-render();
+setInterval(()=>{if(me&&!(st.m&&st.m.t==='form'))render()},60000);
+/* first run in this browser: start from data.json in the repo, if there is one */
+(async()=>{if(localStorage.getItem(K)===null){try{const r=await fetch('data.json');if(r.ok){const d=await r.json();if(Array.isArray(d.users)&&Array.isArray(d.issues)){db=d;localStorage.setItem(K,JSON.stringify(db))}}}catch(e){}}render()})();
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));
 </script></body></html>
